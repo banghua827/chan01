@@ -275,7 +275,13 @@
 │       ├── 📄 SignalMonitor.py: 信号计算
 │       ├── 📄 StaticsChanConfig.py: 缠论计算配置
 │       └── 📄 UpdatePeakPrice.py: 峰值股价更新（用于做动态止损）
-├── 📁 Debug： debug工具
+├── 📁 Debug： debug工具/策略demo
+│   ├── 📄 strategy_demo.py  基于trigger_step的回测实现
+│   ├── 📄 strategy_demo2.py  基于trigger_load的回测实现
+│   ├── 📄 strategy_demo3.py  基于trigger_load实现小级别触发大级别重算
+│   ├── 📄 strategy_demo4.py  基于trigger_load实现多级别喂数据时避免K线时间对齐
+│   ├── 📄 strategy_demo5.py  演示框架如何与基础的机器学习框架结合
+│   ├── 📄 strategy_demo6.py  演示实盘时如何预测对接demo5产出的模型
 │   ├── 📁 cprofile_analysis: 性能分析
 │   │   └── 📄 cprofile_analysis.sh 性能分析脚本
 │   └── 📁 Notebook
@@ -540,9 +546,17 @@ else:  # 绘制动画
     - KL_TYPE.K_60M
     - KL_TYPE.K_30M
     - KL_TYPE.K_15M
+    - KL_TYPE.K_10M
     - KL_TYPE.K_5M
     - KL_TYPE.K_3M
     - KL_TYPE.K_1M
+    - KL_TYPE.K_30S
+    - KL_TYPE.K_20S
+    - KL_TYPE.K_15S
+    - KL_TYPE.K_10S
+    - KL_TYPE.K_5S
+    - KL_TYPE.K_3S
+    - KL_TYPE.K_1S
 - autype：复权类型，传递给获取数据接口，默认为 `AUTYPE.QFQ`,即前复权，可选
     - AUTYPE.QFQ
     - AUTYPE.HFQ
