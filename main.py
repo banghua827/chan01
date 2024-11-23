@@ -3,12 +3,21 @@ from ChanConfig import CChanConfig
 from Common.CEnum import AUTYPE, DATA_SRC, KL_TYPE
 from Plot.AnimatePlotDriver import CAnimateDriver
 from Plot.PlotDriver import CPlotDriver
+from DataAPI.MySQL_API import CMySQLAPI
 
 if __name__ == "__main__":
     code = "sz.000001"
     begin_time = "2018-01-01"
     end_time = None
-    data_src = DATA_SRC.BAO_STOCK
+    
+    # Try custom MySQL API first, if not enough data use BAO_STOCK
+    try:
+        data_src = CMySQLAPI(code=code, begin_time=begin_time, end_time=end_time)
+        if not data_src.has_sufficient_data():
+            raise ValueError("Insufficient data in MySQL API")
+    except:
+        data_src = DATA_SRC.BAO_STOCK
+    
     lv_list = [KL_TYPE.K_DAY]
 
     config = CChanConfig({
@@ -62,6 +71,7 @@ if __name__ == "__main__":
             # },
         }
     }
+    
     chan = CChan(
         code=code,
         begin_time=begin_time,
