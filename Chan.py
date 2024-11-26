@@ -20,7 +20,7 @@ class CChan:
         code,
         begin_time=None,
         end_time=None,
-        data_src: Union[DATA_SRC, str] = DATA_SRC.BAO_STOCK,
+        data_src: Union[DATA_SRC, str] = "custom:MySQL_API.CMySQLAPI",
         lv_list=None,
         config=None,
         autype: AUTYPE = AUTYPE.QFQ,
@@ -117,7 +117,7 @@ class CChan:
 
     def step_load(self):
         assert self.conf.trigger_step
-        self.do_init()  # 清空数据，防止再次重跑没有数据
+        self.do_init()  # 清空数据，防止再次重运没有数据
         yielded = False  # 是否曾经返回过结果
         for idx, snapshot in enumerate(self.load(self.conf.trigger_step)):
             if idx < self.conf.skip_step:
@@ -167,25 +167,24 @@ class CChan:
         return lv_klu_iter
 
     def GetStockAPI(self):
-        _dict = {}
-        if self.data_src == DATA_SRC.BAO_STOCK:
-            from DataAPI.BaoStockAPI import CBaoStock
-            _dict[DATA_SRC.BAO_STOCK] = CBaoStock
-        elif self.data_src == DATA_SRC.CCXT:
-            from DataAPI.ccxt import CCXT
-            _dict[DATA_SRC.CCXT] = CCXT
-        elif self.data_src == DATA_SRC.CSV:
-            from DataAPI.csvAPI import CSV_API
-            _dict[DATA_SRC.CSV] = CSV_API
-        if self.data_src in _dict:
-            return _dict[self.data_src]
-        assert isinstance(self.data_src, str)
-        if self.data_src.find("custom:") < 0:
-            raise CChanException("load src type error", ErrCode.SRC_DATA_TYPE_ERR)
-        package_info = self.data_src.split(":")[1]
-        package_name, cls_name = package_info.split(".")
-        exec(f"from DataAPI.{package_name} import {cls_name}")
-        return eval(cls_name)
+        if isinstance(self.data_src, str) and self.data_src.startswith("custom:"):
+            # Custom data source, format: "custom:module_path:ClassName"
+            _, module_path, class_name = self.data_src.split(":")
+            # Import the module dynamically
+            try:
+                module = __import__(module_path, fromlist=[class_name])
+                stockapi_cls = getattr(module, class_name)
+                return stockapi_cls
+            except ImportError as e:
+                raise CChanException(f"Module import error: {e}", ErrCode.PARA_ERROR)
+            except AttributeError as e:
+                raise CChanException(f"Class not found: {e}", ErrCode.PARA_ERROR)
+        else:
+            # Existing code for predefined data sources
+            data_cls = DATA_SRC2CLS.get(self.data_src)
+            if not data_cls:
+                raise CChanException(f"Data source {self.data_src} not recognized", ErrCode.PARA_ERROR)
+            return data_cls
 
     def load(self, step=False):
         stockapi_cls = self.GetStockAPI()
@@ -201,11 +200,15 @@ class CChan:
                 for lv in self.lv_list:
                     self.kl_datas[lv].cal_seg_and_zs()
         except Exception:
+            if self.data_src == "custom:MySQL_API.CMySQLAPI":
+                # If MySQL fails, fallback to BaoStock for incremental real-time data
+                self.data_src = DATA_SRC.BAO_STOCK
+                return self.load(step=step)
             raise
         finally:
             stockapi_cls.do_close()
         if len(self[0]) == 0:
-            raise CChanException("最高级别没有获得任何数据", ErrCode.NO_DATA)
+            raise CChanException("\u6700\u9ad8\u7ea7\u522b\u6ca1\u6709\u83b7\u5f97\u4efb\u4f55\u6570\u636e", ErrCode.NO_DATA)
 
     def set_klu_parent_relation(self, parent_klu, kline_unit, cur_lv, lv_idx):
         if self.conf.kl_data_check and kltype_lte_day(cur_lv) and kltype_lte_day(self.lv_list[lv_idx-1]):
@@ -218,7 +221,7 @@ class CChan:
             self.kl_datas[cur_lv].add_single_klu(kline_unit)
         except Exception:
             if self.conf.print_err_time:
-                print(f"[ERROR-{self.code}]在计算{kline_unit.time}K线时发生错误!")
+                print(f"[ERROR-{self.code}]\u5728\u8ba1\u7b97{kline_unit.time}K\u7ebf\u65f6\u53d1\u751f\u9519\u8bef!")
             raise
 
     def try_set_klu_idx(self, lv_idx: int, kline_unit: CKLine_Unit):
@@ -230,8 +233,8 @@ class CChan:
             kline_unit.set_idx(self[lv_idx][-1][-1].idx + 1)
 
     def load_iterator(self, lv_idx, parent_klu, step):
-        # K线时间天级别以下描述的是结束时间，如60M线，每天第一根是10点30的
-        # 天以上是当天日期
+        # K\u7ebf\u65f6\u95f4\u5929\u7ea7\u522b\u4ee5\u4e0b\u63cf\u8ff0\u7684\u662f\u7ed3\u675f\u65f6\u95f4\uff0c\u598260M\u7ebf\uff0c\u6bcf\u5929\u7b2c\u4e00\u6839\u662f10\u70b930\u7684
+        # \u5929\u4ee5\u4e0a\u662f\u5f53\u5929\u65e5\u671f
         cur_lv = self.lv_list[lv_idx]
         pre_klu = self[lv_idx][-1][-1] if len(self[lv_idx]) > 0 and len(self[lv_idx][-1]) > 0 else None
         while True:
@@ -270,17 +273,17 @@ class CChan:
            parent_klu.time.day != sub_klu.time.day:
             self.kl_inconsistent_detail[str(parent_klu.time)].append(sub_klu.time)
             if self.conf.print_warning:
-                print(f"[WARNING-{self.code}]父级别时间是{parent_klu.time}，次级别时间却是{sub_klu.time}")
+                print(f"[WARNING-{self.code}]\u7236\u7ea7\u522b\u65f6\u95f4\u662f{parent_klu.time}\uff0c\u6b21\u7ea7\u522b\u65f6\u95f4\u5374\u662f{sub_klu.time}")
             if len(self.kl_inconsistent_detail) >= self.conf.max_kl_inconsistent_cnt:
-                raise CChanException(f"父&子级别K线时间不一致条数超过{self.conf.max_kl_inconsistent_cnt}！！", ErrCode.KL_TIME_INCONSISTENT)
+                raise CChanException(f"\u7236&\u5b50\u7ea7\u522bK\u7ebf\u65f6\u95f4\u4e0d\u4e00\u81f4\u6761\u6570\u8d85\u8fc7{self.conf.max_kl_inconsistent_cnt}\uff01\uff01", ErrCode.KL_TIME_INCONSISTENT)
 
     def check_kl_align(self, kline_unit, lv_idx):
         if self.conf.kl_data_check and len(kline_unit.sub_kl_list) == 0:
             self.kl_misalign_cnt += 1
             if self.conf.print_warning:
-                print(f"[WARNING-{self.code}]当前{kline_unit.time}没在次级别{self.lv_list[lv_idx+1]}找到K线！！")
+                print(f"[WARNING-{self.code}]\u5f53\u524d{kline_unit.time}\u6ca1\u5728\u6b21\u7ea7\u522b{self.lv_list[lv_idx+1]}\u627e\u5230K\u7ebf\uff01\uff01")
             if self.kl_misalign_cnt >= self.conf.max_kl_misalgin_cnt:
-                raise CChanException(f"在次级别找不到K线条数超过{self.conf.max_kl_misalgin_cnt}！！", ErrCode.KL_DATA_NOT_ALIGN)
+                raise CChanException(f"\u5728\u6b21\u7ea7\u522b\u627e\u4e0d\u5230K\u7ebf\u6761\u6570\u8d85\u8fc7{self.conf.max_kl_misalgin_cnt}\uff01\uff01", ErrCode.KL_DATA_NOT_ALIGN)
 
     def __getitem__(self, n) -> CKLine_List:
         if isinstance(n, KL_TYPE):
@@ -295,3 +298,5 @@ class CChan:
             return sorted(self[idx].bs_point_lst.lst, key=lambda x: x.klu.time)
         assert len(self.lv_list) == 1
         return sorted(self[0].bs_point_lst.lst, key=lambda x: x.klu.time)
+
+
