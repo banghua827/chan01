@@ -9,10 +9,22 @@ from Common.CEnum import AUTYPE, DATA_SRC, KL_TYPE
 from Common.ChanException import CChanException, ErrCode
 from Common.CTime import CTime
 from Common.func_util import check_kltype_order, kltype_lte_day
+from DataAPI.BaoStockAPI import CBaoStock
+from DataAPI.MySQL_API import CMySQLAPI
 from DataAPI.CommonStockAPI import CCommonStockApi
 from KLine.KLine_List import CKLine_List
 from KLine.KLine_Unit import CKLine_Unit
+from DataAPI.ccxt import CCXT
+from DataAPI.csvAPI import CSV_API
 
+# Define the DATA_SRC2CLS mapping
+DATA_SRC2CLS = {
+    DATA_SRC.BAO_STOCK: CBaoStock,
+    DATA_SRC.CCXT: CCXT,
+    DATA_SRC.CSV: CSV_API,
+    "custom:DataAPI.MySQL_API:CMySQLAPI": CMySQLAPI,
+    # Add other data sources as needed
+}
 
 class CChan:
     def __init__(
@@ -275,7 +287,7 @@ class CChan:
             if self.conf.print_warning:
                 print(f"[WARNING-{self.code}]\u7236\u7ea7\u522b\u65f6\u95f4\u662f{parent_klu.time}\uff0c\u6b21\u7ea7\u522b\u65f6\u95f4\u5374\u662f{sub_klu.time}")
             if len(self.kl_inconsistent_detail) >= self.conf.max_kl_inconsistent_cnt:
-                raise CChanException(f"\u7236&\u5b50\u7ea7\u522bK\u7ebf\u65f6\u95f4\u4e0d\u4e00\u81f4\u6761\u6570\u8d85\u8fc7{self.conf.max_kl_inconsistent_cnt}\uff01\uff01", ErrCode.KL_TIME_INCONSISTENT)
+                raise CChanException(r"\u7236&\u5b50\u7ea7\u522bK\u7ebf\u65f6\u95f4\u4e0d\u4e00\u81f4\u676条数超过{self.conf.max_kl_inconsistent_cnt}！！", ErrCode.KL_TIME_INCONSISTENT)
 
     def check_kl_align(self, kline_unit, lv_idx):
         if self.conf.kl_data_check and len(kline_unit.sub_kl_list) == 0:
@@ -283,7 +295,7 @@ class CChan:
             if self.conf.print_warning:
                 print(f"[WARNING-{self.code}]\u5f53\u524d{kline_unit.time}\u6ca1\u5728\u6b21\u7ea7\u522b{self.lv_list[lv_idx+1]}\u627e\u5230K\u7ebf\uff01\uff01")
             if self.kl_misalign_cnt >= self.conf.max_kl_misalgin_cnt:
-                raise CChanException(f"\u5728\u6b21\u7ea7\u522b\u627e\u4e0d\u5230K\u7ebf\u6761\u6570\u8d85\u8fc7{self.conf.max_kl_misalgin_cnt}\uff01\uff01", ErrCode.KL_DATA_NOT_ALIGN)
+                raise CChanException(r"\u5728\u6b21\u7ea7\u522b\u627e\u4e0d\u5230K\u7ebf\u676条数超过{self.conf.max_kl_misalgin_cnt}！！", ErrCode.KL_DATA_NOT_ALIGN)
 
     def __getitem__(self, n) -> CKLine_List:
         if isinstance(n, KL_TYPE):
@@ -298,5 +310,7 @@ class CChan:
             return sorted(self[idx].bs_point_lst.lst, key=lambda x: x.klu.time)
         assert len(self.lv_list) == 1
         return sorted(self[0].bs_point_lst.lst, key=lambda x: x.klu.time)
+
+
 
 
