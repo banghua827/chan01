@@ -6,10 +6,10 @@ from Plot.PlotDriver import CPlotDriver
 from DataAPI.MySQL_API import CMySQLAPI
 
 if __name__ == "__main__":
-    code = "sz.000001"
+    code = "sz.000815"
     begin_time = "2018-01-01"
     end_time = None
-    
+
     # Try custom MySQL API first, if not enough data use BAO_STOCK
     try:
         data_src = CMySQLAPI(code=code, begin_time=begin_time, end_time=end_time)
@@ -17,7 +17,6 @@ if __name__ == "__main__":
             raise ValueError("Insufficient data in MySQL API")
     except:
         data_src = DATA_SRC.BAO_STOCK
-    
     lv_list = [KL_TYPE.K_DAY]
 
     config = CChanConfig({
@@ -35,6 +34,18 @@ if __name__ == "__main__":
         "zs_algo": "normal",
     })
 
+    # Create Chan object
+    chan = CChan(
+        code=code,
+        begin_time=begin_time,
+        end_time=end_time,
+        data_src=data_src,
+        lv_list=lv_list,
+        config=config,
+        autype=AUTYPE.QFQ,
+    )
+
+    # Plot configuration
     plot_config = {
         "plot_kline": True,
         "plot_kline_combine": True,
@@ -52,7 +63,6 @@ if __name__ == "__main__":
         "plot_rsi": False,
         "plot_kdj": False,
     }
-
     plot_para = {
         "seg": {
             # "plot_trendline": True,
@@ -71,17 +81,6 @@ if __name__ == "__main__":
             # },
         }
     }
-    
-    chan = CChan(
-        code=code,
-        begin_time=begin_time,
-        end_time=end_time,
-        data_src=data_src,
-        lv_list=lv_list,
-        config=config,
-        autype=AUTYPE.QFQ,
-    )
-
     if not config.trigger_step:
         plot_driver = CPlotDriver(
             chan,
